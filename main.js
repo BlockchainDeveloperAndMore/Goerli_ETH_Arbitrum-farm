@@ -235,7 +235,7 @@ async function depositeFunction(AccountsData, nonce){
     provider
   )
 
-  let random = randomInt(randomMin - randomMax) / 100000000;
+  let random = randomInt(randomMax - randomMin) / 100000000;
   var depositAmount = 0.00009 + random // ETH
 
   const depositIn = ethers.utils.parseUnits(
