@@ -132,12 +132,12 @@ async function estimateFee(AccountsData, amount){
     '0',
     '0x',
   )
-    writeLog(`Bridge swap nativeFee =${ethers.utils.parseUnits(
+    writeLog(`Bridge swap nativeFee =${ethers.utils.formatUnits(
       estimateFeeTransaction.nativeFee,
       decimals0
     )}`);
     
-    console.log(`Bridge swap nativeFee =${ethers.utils.parseUnits(
+    console.log(`Bridge swap nativeFee =${ethers.utils.formatUnits(
       estimateFeeTransaction.nativeFee,
       decimals0
     )}`);
