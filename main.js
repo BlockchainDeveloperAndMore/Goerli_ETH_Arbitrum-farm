@@ -94,7 +94,7 @@ async function main() {
     
     bridgeFunction(AccountsData[i], nonce);
     
-    let timer = randomInt(3000 - 11000);
+    let timer = randomInt(11000 - 3000);
     
     writeLog(`Work with account №${i} is finished`);
     console.log(`Work with account №${i} is finished`);
