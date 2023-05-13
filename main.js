@@ -1,6 +1,6 @@
 const { ethers } = require('ethers')
-const { fs } = require('fs')
-const { flatted } = require('flatted')
+const fs = require('fs')
+const flatted = require('flatted')
 const { abi: IUniswapV3PoolABI } = require('@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json')
 const { abi: SwapRouterABI } = require('@uniswap/v3-periphery/artifacts/contracts/interfaces/ISwapRouter.sol/ISwapRouter.json')
 const { abi: WETH9ABI } = require('@uniswap/v3-periphery/artifacts/contracts/interfaces/external/IWETH9.sol/IWETH9.json')
@@ -9,6 +9,23 @@ const { getPoolImmutables, getPoolState } = require('./helpers')
 const { AccountsData } = require('./AccountsData')
 const ERC20ABI = require('./abi.json')
 const { randomInt } = require('crypto')
+const { allowedNodeEnvironmentFlags } = require('process')
+
+/*
+ * CONFIGURATION.
+ */
+ 
+//========================================================================================================================================
+
+// ETH depositAmount to swap (arbETH --> Goerli ETH) = 0.00009 + random
+const randomMin = 1; // 0.00001
+const randomMax = 8; // 0.00008
+
+// Timer between accounts
+const timeMin = 3000; // min 3 sec
+const timeMax = 8000; // max 8 sec
+
+//========================================================================================================================================
 
 /*
  * Logs function.
@@ -42,18 +59,14 @@ const ChainId = '154'
 // Max approve value.
 const MAX_APPROVE_VALUE = "115792089237316195423570985008687907853269984665640564039457584007913129639935"
 
-// ETH depositAmount = 0.00009 + random
-const randomMin = 1000; // 0.00001
-const randomMax = 8000; // 0.00008
-
 /*
  * Gas Limit const.
  */
 
-const gasLimitDepositValue = 2000000 // 2 000 000
-const gasLimitApproveValue = 3000000 // 3 000 000
-const gasLimitSwapValue = 5000000    // 5 000 000 
-const gasLimitBridgeValue = 10000000 // 10 000 000 
+const gasLimitDepositValue = 1000000 // 1 000 000
+const gasLimitApproveValue = 1500000 // 1 500 000
+const gasLimitSwapValue = 2000000    // 2 000 000 
+const gasLimitBridgeValue = 3000000 // 3 000 000 
 
 /*
  * Wrapped Ether data.
@@ -82,19 +95,24 @@ async function main() {
   // Work cycle
   for (let i = 0; i <= AccountsData.length - 1; i++){
 
+    writeLog(`========================================================================================================================================`);
+    console.log(`========================================================================================================================================`);
+    writeLog(`Starting work on account №${i}`);
+    console.log(`Starting work on account №${i}`);
+
     let WALLET_SECRET = AccountsData[i];
     const wallet = new ethers.Wallet(WALLET_SECRET);
     let WALLET_ADDRESS = wallet.address;
 
     var nonce = await provider.getTransactionCount(WALLET_ADDRESS);
 
-    depositeFunction(AccountsData[i], nonce);
+    nonce = await depositeFunction(AccountsData[i], nonce);
 
-    swapFunction(AccountsData[i], nonce);
+    nonce = await swapFunction(AccountsData[i], nonce);
+
+    await bridgeFunction(AccountsData[i], nonce);
     
-    bridgeFunction(AccountsData[i], nonce);
-    
-    let timer = randomInt(11000 - 3000);
+    let timer = randomInt(timeMax) + timeMin;
     
     writeLog(`Work with account №${i} is finished`);
     console.log(`Work with account №${i} is finished`);
@@ -132,15 +150,6 @@ async function estimateFee(AccountsData, amount){
     '0',
     '0x',
   )
-    writeLog(`Bridge swap nativeFee =${ethers.utils.formatUnits(
-      estimateFeeTransaction.nativeFee,
-      decimals0
-    )}`);
-    
-    console.log(`Bridge swap nativeFee =${ethers.utils.formatUnits(
-      estimateFeeTransaction.nativeFee,
-      decimals0
-    )}`);
     
   return estimateFeeTransaction.nativeFee;
 
@@ -188,7 +197,7 @@ async function bridgeFunction(AccountsData, nonce){
       writeLog(transaction.hash);
       console.log("Goerli ETH Token approve success!");
       console.log(transaction.hash);
-      var nonce = nonce + 1;
+      nonce = nonce + 1;
     })
   }
 
@@ -217,7 +226,7 @@ async function bridgeFunction(AccountsData, nonce){
     writeLog(transaction.hash);
     console.log("bridgeTransaction success!");
     console.log(transaction.hash);
-    var nonce = nonce + 1;
+    nonce = nonce + 1;
   })
 
 }
@@ -235,8 +244,8 @@ async function depositeFunction(AccountsData, nonce){
     provider
   )
 
-  let random = randomInt(randomMax - randomMin) / 100000000;
-  var depositAmount = 0.00009 + random // ETH
+  let random = randomInt(randomMax - randomMin);
+  var depositAmount = (9 + random) / 1000000 // ETH
 
   const depositIn = ethers.utils.parseUnits(
     depositAmount.toString(),
@@ -255,8 +264,10 @@ async function depositeFunction(AccountsData, nonce){
     writeLog(transaction.hash);
     console.log("depositTransaction success!");
     console.log(transaction.hash);
-    var nonce = nonce + 1;
+    nonce = nonce + 1;
   });
+
+  return nonce
 
 }
 
@@ -302,7 +313,7 @@ async function swapFunction(AccountsData, nonce){
       writeLog(transaction.hash);
       console.log("WETH approve success!");
       console.log(transaction.hash);
-      var nonce = nonce + 1;
+      nonce = nonce + 1;
     });
   } 
   
@@ -332,7 +343,7 @@ async function swapFunction(AccountsData, nonce){
     sqrtPriceLimitX96: 0,
   }
 
-  const swapTransaction = swapRouterContract.connect(connectedWallet).exactInputSingle(
+  const swapTransaction = await swapRouterContract.connect(connectedWallet).exactInputSingle(
     swapParams,
     {
       gasPrice: await provider.getGasPrice(),
@@ -344,9 +355,25 @@ async function swapFunction(AccountsData, nonce){
     writeLog(transaction.hash);
     console.log("Swap WETH --> Goerli ETH Token success!");
     console.log(transaction.hash);
-    var nonce = nonce + 1;
+    nonce = nonce + 1;
   });
+
+  return nonce
 
 }
 
 main();
+
+// async function test(){
+//   let random = randomInt(randomMax - randomMin) / 100000000;
+//   var depositAmount = 0.00009 + random // ETH
+//   console.log(depositAmount)
+
+//   const depositIn = ethers.utils.parseUnits(
+//     depositAmount.toString(),
+//     decimals0
+//   )
+//   console.log(depositIn)
+// }
+
+// test()
